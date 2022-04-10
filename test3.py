@@ -7,6 +7,7 @@ import GINE
 from GINE import VN
 import numpy as np
 from torchdrug import tasks
+from torchdrug.layers import functional
 
 
 mol = data.Molecule.from_smiles("C1=CC=CC=C1", node_feature="default",
@@ -19,8 +20,64 @@ lengths += [len(dataset) - sum(lengths)]
 train_set, valid_set, test_set = torch.utils.data.random_split(dataset, lengths)
 sample = dataset[0]
 sample2 = dataset[1]
+sample3 = dataset[2]
+
+g1 = sample['graph']
+g2 = sample2['graph']
+g3 = sample3['graph']
+
+print(g1)
+print(g1.to_smiles())
+g1.visualize(save_file='/Users/zhaoshiyu/PycharmProjects/retrieval/test.png')
+print(g1.atom_type)
+print(g1.bond_type)
+print(g1.node_feature.shape)
+va = VN()
+new_s = va(g1)
+print(new_s)
+print(new_s.atom_type)
+print(new_s.bond_type)
+print(new_s.node_feature.shape)
+
+sample = dataset[0]
+sample2 = dataset[1]
+sample3 = dataset[2]
+
+g1 = sample['graph']
+g2 = sample2['graph']
+g3 = sample3['graph']
+
+pg = data.Graph.pack([g1, g2, g3])
+print(pg)
+print(pg.batch_size)
+print(pg.num_nodes)
+print(pg.num_relation)
+print(pg.atom_type)
+print(pg.node_feature.shape)
+print(pg.edge_list.shape)
+
+def _append(data, num_xs, input, mask=None):
+    if mask is None:
+        mask = torch.ones_like(num_xs, dtype=torch.bool)
+    new_num_xs = num_xs + mask
+    new_num_cum_xs = new_num_xs.cumsum(0)
+    print('new_num_cum_xs', new_num_cum_xs)
+    new_num_x = new_num_cum_xs[-1].item()
+    new_data = torch.zeros(new_num_x, *data.shape[1:], dtype=data.dtype, device=data.device)
+    print('new_data', new_data)
+    starts = new_num_cum_xs - new_num_xs
+    ends = starts + num_xs
+    print('starts', starts)
+    print('ends', ends)
+    index = functional.multi_slice_mask(starts, ends, new_num_x)
+    print('index', index)
+    new_data[index] = data
+    new_data[~index] = input[mask]
+    return new_data, new_num_xs
 
 
+
+'''
 print(dataset.targets)
 def a():
     train_ind = np.array(train_set.indices)
@@ -33,7 +90,6 @@ print(train_set[0])
 print(train_set[1])
 print(train_set[2])
 
-'''
 tasks = dataset.tasks
 targets = dataset.targets
 num_labels = len(tasks) - 1

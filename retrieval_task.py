@@ -31,7 +31,7 @@ class RetrievalReader(tasks.Task, core.Configurable):
     _option_members = {"task", "criterion", "metric"}
 
     def __init__(self, model, task=(), criterion="mse", metric=("mae", "rmse"), num_mlp_layer=1,
-                normalization=True, entity_level="residue", num_class=None, verbose=0):
+                normalization=True, num_class=None, verbose=0):
         super(RetrievalReader, self).__init__()
         self.model = model
         self.task = task
@@ -39,7 +39,6 @@ class RetrievalReader(tasks.Task, core.Configurable):
         self.metric = metric
         self.num_mlp_layer = num_mlp_layer
         self.normalization = normalization
-        self.entity_level = entity_level
         self.num_class = num_class
         self.verbose = verbose
 

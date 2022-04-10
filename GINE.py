@@ -32,6 +32,10 @@ class VN(object):
             self.default["edge_feature"] = torch.as_tensor(edge_feature)
 
     def __call__(self, old_graph):
+        batch_size = old_graph.batch_size
+        num_nodes = old_graph.num_nodes
+        num_relation = old_graph.num_relation
+
         graph = old_graph.clone()
         edge_list = graph.edge_list
         edge_weight = graph.edge_weight
@@ -226,6 +230,7 @@ class GINE(nn.Module, core.Configurable):
         """
         hiddens = []
         layer_input = input
+
         if self.virtual_node:
             def add_virtual(molecule):
                 molecule.cpu()

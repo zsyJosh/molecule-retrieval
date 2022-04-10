@@ -61,7 +61,8 @@ class Retriever(nn.Module, core.Configurable):
             kvalue = kvalue[:, 1:]
             kind = kind[:, 1:]
             kself = kind[:, 0]
-            kself = kself.unsqueeze(-1)
+            #kself = kself.unsqueeze(-1)
+            '''
             for i in range(self.emb_label.shape[0]):
                 label_self = torch.gather(self.emb_label[i].expand(batch_size, self.num_evidence), -1, kself).cuda()
                 klabel = torch.gather(self.emb_label[i].expand(batch_size, self.num_evidence), -1, kind).cuda()
@@ -71,24 +72,14 @@ class Retriever(nn.Module, core.Configurable):
                 b_s = len(hit_rate)
                 rate = hit_rate.sum() / b_s
                 print(rate)
+            '''
         elif mode == 'test':
             kvalue, kind = torch.topk(score, self.k, dim=-1)
         else:
             raise NotImplementedError
         kvalue /= torch.sqrt(kvalue)
         kvalue = self.sfm(kvalue)
-        # TODO: whether or not to add representations of different labels together? Or concatenate?
-        res = []
-        for i in range(self.emb_label.shape[0]):
-            klabel = torch.gather(self.emb_label[i].expand(batch_size, self.num_evidence), -1, kind).cuda()
-            klabel_emb = self.label_embedding[i](klabel)
-            weighted_label_emb = klabel_emb * kvalue.unsqueeze(-1)
-            res_emb = weighted_label_emb.sum(dim=1)
-            res.append(res_emb)
-        if self.out_fation == 'sum':
-            return sum(res)
-        elif self.out_fation == 'concat':
-            return torch.cat(res, dim=1)
-        else:
-            raise NotImplementedError
+        sum_emb = self.evidence_emb(kind) * kvalue.unsqueeze(-1)
+        return sum_emb.sum(1)
+        # direct sum of top k graph representation
 
