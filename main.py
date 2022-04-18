@@ -81,7 +81,10 @@ def pretrain_index(encoder, train_set, evidence_dim, evidence_dir):
     for id, sample in enumerate(train_set):
         # train_set is subset subscription of dataset, "EMB" is added
         assert id == sample['EMB']
-        emb = encoder(sample['graph'].cuda(), sample['graph'].node_feature.float().cuda())['graph_feature']
+        graph = sample['graph'].cuda()
+        emb = encoder(graph, graph.node_feature.float())['graph_feature']
+        del graph
+        torch.cuda.empty_cache()
         pretrained_embedding[id] = emb
 
     emb_path = Path(evidence_dir)
