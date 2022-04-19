@@ -27,8 +27,6 @@ class Retriever(nn.Module, core.Configurable):
         self.evidence_emb.weight.requires_grad = True
         self.emb_label = emb_label
         self.num_label_types = emb_label.shape[0]
-        print('self.num_label_types', self.num_label_types)
-        print('num_label_types', num_label_types)
         self.num_classes_per_label = emb_label.max(dim=-1).values + 1
         self.label_embedding = []
         for i in range(self.num_label_types):

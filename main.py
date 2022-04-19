@@ -9,13 +9,23 @@ import os
 import numpy as np
 import GINE
 from retrieval_task import RetrievalReader
-from retriever import Retriever
+from retriever2 import Retriever
 from encoder_retriever import encoder_retriever
 
 
 # dataset
 def dataset_download(path):
-    dataset = datasets.ClinTox(path)
+    dataset = datasets.HIV(path)
+    trans = True
+    if trans:
+        from ogb.graphproppred import GraphPropPredDataset
+        dataset2 = GraphPropPredDataset(name="ogbg-molhiv", root='dataset/')
+        split_idx = dataset2.get_idx_split()
+        train_idx, valid_idx, test_idx = split_idx["train"], split_idx["valid"], split_idx["test"]
+        train_set = torch.utils.data.Subset(dataset, train_idx.tolist())
+        valid_set = torch.utils.data.Subset(dataset, valid_idx.tolist())
+        test_set = torch.utils.data.Subset(dataset, test_idx.tolist())
+        return dataset, train_set, valid_set, test_set
     lengths = [int(0.8 * len(dataset)), int(0.1 * len(dataset))]
     lengths += [len(dataset) - sum(lengths)]
     train_set, valid_set, test_set = torch.utils.data.random_split(dataset, lengths)
@@ -78,14 +88,15 @@ def evidence_label(dataset, task, train_set, device):
 def pretrain_index(encoder, train_set, evidence_dim, evidence_dir):
     encoder.eval()
     pretrained_embedding = torch.zeros(len(train_set), evidence_dim)
-    for id, sample in enumerate(train_set):
-        # train_set is subset subscription of dataset, "EMB" is added
-        assert id == sample['EMB']
-        graph = sample['graph'].cuda()
-        emb = encoder(graph, graph.node_feature.float())['graph_feature']
-        del graph
-        torch.cuda.empty_cache()
-        pretrained_embedding[id] = emb
+    with torch.no_grad():
+        for id, sample in enumerate(train_set):
+            # train_set is subset subscription of dataset, "EMB" is added
+            assert id == sample['EMB']
+            graph = sample['graph'].cuda()
+            emb = encoder(graph, graph.node_feature.float())['graph_feature']
+            del graph
+            torch.cuda.empty_cache()
+            pretrained_embedding[id] = emb
 
     emb_path = Path(evidence_dir)
     if not emb_path.is_dir():
@@ -98,7 +109,7 @@ def pretrain_index(encoder, train_set, evidence_dim, evidence_dir):
 
 # retriever model
 def retriever_model(dataset, task, train_set, valid_set, test_set, encoder, topk, emb_label, num_class, emb_file, retriever_path):
-    retrieval = Retriever(dim=1024, emb_path=emb_file, emb_label=emb_label, num_label_types=num_class, topk=topk, num_evidence=len(train_set), out_fation='sum')
+    retrieval = Retriever(dim=1024, emb_path=emb_file, emb_label=emb_label, num_label_types=num_class, topk=topk, num_evidence=len(train_set))
     enc_retr = encoder_retriever(encoder=encoder, retriever=retrieval)
     assert 'EMB' not in task
     retrieval_task = RetrievalReader(model=enc_retr, task=task,
@@ -106,8 +117,9 @@ def retriever_model(dataset, task, train_set, valid_set, test_set, encoder, topk
 
     retrieval_optimizer = torch.optim.Adam(retrieval_task.parameters(), lr=1e-3)
     retrieve_solver = core.Engine(retrieval_task, train_set, valid_set, test_set, retrieval_optimizer, gpus=[0], batch_size=1024)
-    retrieve_solver.train(num_epoch=100)
-    retrieve_solver.evaluate("valid")
+    for i in range(100):
+        retrieve_solver.train(num_epoch=1)
+        retrieve_solver.evaluate("valid")
     tm = '_'.join(time.ctime().split())
     retrieve_solver.save(retriever_path + tm + '_retriever.pt')
     return retrieve_solver, retrieval
@@ -124,7 +136,7 @@ def main():
 
     hidden_dims = [256, 256, 256, 256]
     evidence_dim = sum(hidden_dims)
-    task = [dataset.tasks[1]].copy()
+    task = dataset.tasks.copy()
     num_class = 1
     print(task)
     encoder_solver, encoder = encoder_pretraining(dataset, task, train_set, valid_set, test_set, num_evidence, evidence_dim, hidden_dims,
