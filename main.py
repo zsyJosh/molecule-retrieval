@@ -40,7 +40,7 @@ def encoder_pretraining(dataset, task, train_set, valid_set, test_set, num_evide
                        hidden_dims=[256, 256, 256, 256],
                        short_cut=True, batch_norm=True, concat_hidden=True)
     '''
-    encoder = GINE.GINE(num_evidence= num_evidence, evidence_dim=evidence_dim, input_dim=dataset.node_feature_dim,
+    encoder = GINE(num_evidence= num_evidence, evidence_dim=evidence_dim, input_dim=dataset.node_feature_dim,
                        hidden_dims=hidden_dims, edge_input_dim=ef_dim,
                        short_cut=True, batch_norm=True, concat_hidden=True)
     print(task)
