@@ -54,7 +54,7 @@ class Retriever(nn.Module, core.Configurable):
 
         assert self.num_evidence == self.emb_label.shape[1]
 
-    def forward(self, graph_feature, mode):
+    def forward(self, graph_feature, mode, target):
         """
         retrieve top k evidence graphs, average in the representation space
         :param  graph_feature: [batch_size, dim], a batch of query graph representation
@@ -65,10 +65,30 @@ class Retriever(nn.Module, core.Configurable):
         score = torch.mm(graph_feature, self.evidence_emb.weight.T)
         if mode == 'train':
             kvalue, kind = torch.topk(score, self.k + 1, dim=-1)
-            #kvalue = kvalue[:, 1:]
             kind = kind[:, 1:]
+            kvalue = kvalue[:, 1:]
+            if target is not None:
+                label_self = target.unsqueeze(-1).cuda()
+                for i in range(self.emb_label.shape[0]):
+                    klabel = torch.gather(self.emb_label[i].expand(batch_size, self.num_evidence), -1, kind).cuda()
+                    same_label = label_self.expand(batch_size, self.k) == klabel
+                    hit_rate = same_label.sum(-1)
+                    hit_rate = hit_rate / self.k
+                    b_s = len(hit_rate)
+                    rate = hit_rate.sum() / b_s
+                    print(rate)
         elif mode == 'test':
             kvalue, kind = torch.topk(score, self.k, dim=-1)
+            if target is not None:
+                label_self = target.unsqueeze(-1).cuda()
+                for i in range(self.emb_label.shape[0]):
+                    klabel = torch.gather(self.emb_label[i].expand(batch_size, self.num_evidence), -1, kind).cuda()
+                    same_label = label_self.expand(batch_size, self.k) == klabel
+                    hit_rate = same_label.sum(-1)
+                    hit_rate = hit_rate / self.k
+                    b_s = len(hit_rate)
+                    rate = hit_rate.sum() / b_s
+                    print(rate)
         else:
             raise NotImplementedError
         if self.each_concat:

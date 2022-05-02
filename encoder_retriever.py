@@ -14,7 +14,7 @@ class encoder_retriever(nn.Module, core.Configurable):
         self.retriever = retriever
         self.output_dim = retriever.output_dim
 
-    def forward(self, graph, input, mode):
+    def forward(self, graph, input, mode, target=None):
         """
         concatenate encoder and retriever for core.Engine
         :param graph: the batched query molecule
@@ -24,5 +24,5 @@ class encoder_retriever(nn.Module, core.Configurable):
         """
         enc_out = self.encoder(graph, input)
         graph_rep = enc_out['graph_feature']
-        res = self.retriever(graph_rep, mode)
+        res = self.retriever(graph_rep, mode, target)
         return res

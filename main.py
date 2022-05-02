@@ -15,6 +15,9 @@ from encoder_retriever import encoder_retriever
 
 # dataset
 def dataset_download(path):
+    """
+    download the dataset and split it
+    """
     dataset = datasets.HIV(path)
     trans = True
     if trans:
@@ -31,8 +34,25 @@ def dataset_download(path):
     train_set, valid_set, test_set = torch.utils.data.random_split(dataset, lengths)
     return dataset, train_set, valid_set, test_set
 
+
 # encoder pretraining
 def encoder_pretraining(dataset, task, train_set, valid_set, test_set, num_evidence, evidence_dim, hidden_dims, encoder_path=None, load=False, load_path=None):
+    """
+    pretrain the encoder (GINE here)
+
+    :param dataset: dataset to use
+    :param task: target to learn (the classification label here)
+    :param train_set: train set
+    :param valid_set: valid set
+    :param test_set: test set
+    :param num_evidence: number of evidence graph in the training set
+    :param evidence_dim: number of dim of evidence representation
+    :param hidden_dims: dims of the hidden layers (can be different)
+    :param encoder_path: the path to store the encoder after training
+    :param load: whether to load it or train it
+    :param load_path: the path to load the trained encoder
+    """
+
     ef_dim = valid_set[0].pop('graph').edge_feature.shape[1]
 
     '''    
@@ -40,7 +60,7 @@ def encoder_pretraining(dataset, task, train_set, valid_set, test_set, num_evide
                        hidden_dims=[256, 256, 256, 256],
                        short_cut=True, batch_norm=True, concat_hidden=True)
     '''
-    encoder = GINE(num_evidence= num_evidence, evidence_dim=evidence_dim, input_dim=dataset.node_feature_dim,
+    encoder = GINE.GINE(num_evidence= num_evidence, evidence_dim=evidence_dim, input_dim=dataset.node_feature_dim,
                        hidden_dims=hidden_dims, edge_input_dim=ef_dim,
                        short_cut=True, batch_norm=True, concat_hidden=True)
     print(task)
@@ -61,22 +81,40 @@ def encoder_pretraining(dataset, task, train_set, valid_set, test_set, num_evide
         encoder_solver.save(encoder_path + tm + '_encoder.pt')
     return encoder_solver, encoder
 
+
 # number the molecules in train_set
 def evidence_enumeration(dataset, train_set):
+    """
+    Give the evidence graph in the training set an order. The number label (the order) is used to retrieve the evidence representation.
+    """
+
+    # get the indices of training set
     train_ind = np.array(train_set.indices)
+
+    # initialize for all graphs
     emb_ind = [len(train_set)] * len(dataset)
     emb_ind = np.array(emb_ind)
     emb_ind[train_ind] = np.arange(len(train_set)).tolist()
+
+    # add the order for training graphs only, others' order is set to len(train_set)
     dataset.targets['EMB'] = emb_ind.tolist()
     return dataset
 
+
 # retrieve evidence label
 def evidence_label(dataset, task, train_set, device):
+    """
+    retrieve the ground truth label of the evidence graphs for each target task
+    """
+    # make sure we are not retrieving the order
     assert 'EMB' not in task
+
+    # get the indices of training set
     train_ind = np.array(train_set.indices)
     targets = dataset.targets
-    num_types_labels = len(task)
     emb_label = []
+
+    # get the ground truth label by the training set indices
     for label in task:
         full_label = np.array(targets[label])
         evidence_label = full_label[train_ind]
@@ -84,8 +122,17 @@ def evidence_label(dataset, task, train_set, device):
     emb_label = torch.tensor(emb_label, device=device)
     return emb_label
 
+
 # pretrained index
 def pretrain_index(encoder, train_set, evidence_dim, evidence_dir):
+    """
+    encoder the evidence graph and store them
+    :param encoder: evidence encoder
+    :param train_set: training set
+    :param evidence_dim: evidence representation dim
+    :param evidence_dir: path to store the evidence representation
+    :return: file name of the stored evidence representation
+    """
     encoder.eval()
     pretrained_embedding = torch.zeros(len(train_set), evidence_dim)
     with torch.no_grad():
@@ -109,6 +156,21 @@ def pretrain_index(encoder, train_set, evidence_dim, evidence_dir):
 
 # retriever model
 def retriever_model(dataset, task, train_set, valid_set, test_set, encoder, topk, emb_label, num_class, emb_file, retriever_path):
+    """
+    Training the retriever model as well as the evidence encoder.
+    :param dataset: dataset to use.
+    :param task: the label to be classified
+    :param train_set: training set
+    :param valid_set: validation set
+    :param test_set: test set
+    :param encoder: evidence/query encoder (they are the same)
+    :param topk: top k retrieval
+    :param emb_label: the ground truth of evidence graph
+    :param num_class: number of classes to be classified
+    :param emb_file: embedding file
+    :param retriever_path: path to store the retriever model
+    :return: trained retriever model
+    """
     retrieval = Retriever(dim=1024, emb_path=emb_file, emb_label=emb_label, num_label_types=num_class, topk=topk, num_evidence=len(train_set))
     enc_retr = encoder_retriever(encoder=encoder, retriever=retrieval)
     assert 'EMB' not in task
@@ -117,9 +179,7 @@ def retriever_model(dataset, task, train_set, valid_set, test_set, encoder, topk
 
     retrieval_optimizer = torch.optim.Adam(retrieval_task.parameters(), lr=1e-3)
     retrieve_solver = core.Engine(retrieval_task, train_set, valid_set, test_set, retrieval_optimizer, gpus=[0], batch_size=1024)
-    for i in range(100):
-        retrieve_solver.train(num_epoch=1)
-        retrieve_solver.evaluate("valid")
+    retrieve_solver.train(num_epoch=100)
     tm = '_'.join(time.ctime().split())
     retrieve_solver.save(retriever_path + tm + '_retriever.pt')
     return retrieve_solver, retrieval

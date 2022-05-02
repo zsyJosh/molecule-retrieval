@@ -58,6 +58,19 @@ class Retriever(nn.Module, core.Configurable):
             kvalue, kind = torch.topk(score, self.k + 1, dim=-1)
             kvalue = kvalue[:, 1:]
             kind = kind[:, 1:]
+            '''
+            kself = kind[:, 0]
+            kself = kself.unsqueeze(-1)
+            for i in range(self.emb_label.shape[0]):
+                label_self = torch.gather(self.emb_label[i].expand(batch_size, self.num_evidence), -1, kself).cuda()
+                klabel = torch.gather(self.emb_label[i].expand(batch_size, self.num_evidence), -1, kind).cuda()
+                same_label = label_self.expand(batch_size, self.k) == klabel
+                hit_rate = same_label.sum(-1)
+                hit_rate = hit_rate / self.k
+                b_s = len(hit_rate)
+                rate = hit_rate.sum() / b_s
+                print(rate)
+            '''
         elif mode == 'test':
             kvalue, kind = torch.topk(score, self.k, dim=-1)
         else:

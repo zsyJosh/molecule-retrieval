@@ -119,11 +119,17 @@ class RetrievalReader(tasks.Task, core.Configurable):
     def predict(self, batch, all_loss=None, metric=None):
         if self.model.training:
             mode = 'train'
+            target = self.target(batch)
+            labeled = ~torch.isnan(target)
+            target[~labeled] = 0
         else:
             mode = 'test'
+            target = self.target(batch)
+            labeled = ~torch.isnan(target)
+            target[~labeled] = 0
         graph = batch["graph"]
         input = graph.node_feature.float()
-        output = self.model(graph, input, mode)
+        output = self.model(graph, input, mode, target)
         pred = self.mlp(output)
         return pred
 
